@@ -31,18 +31,31 @@ var randomCmd = &cobra.Command{
 	Short: "Get random dad joke",
 	Long:  `This is command fetches a random dad joke from the icanhazdadjoke api`,
 	Run: func(cmd *cobra.Command, args []string) {
-		getRandomJoke()
+		jokeTerm, _ := cmd.Flags().GetString("term")
+		if jokeTerm != "" {
+			getRandomJokeWithTerm(jokeTerm)
+		} else {
+			getRandomJoke()
+		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(randomCmd)
+	randomCmd.PersistentFlags().String("term", "", "A search term for a dad joke .")
 }
 
 type Joke struct {
 	ID     string `json:"id"`
 	Joke   string `json:"joke"`
 	Status int    `json:"status"`
+}
+
+type SearchResult struct {
+	Results    json.RawMessage `json:"results"`
+	SearchTerm string          `json:"search_term"`
+	Status     int             `json:"status"`
+	TotalJokes int             `json:"total_jokes"`
 }
 
 func getRandomJoke() {
@@ -53,6 +66,25 @@ func getRandomJoke() {
 		log.Printf("Could not unmarshal response - %v", err)
 	}
 	fmt.Println(string(joke.Joke))
+}
+
+func getRandomJokeWithTerm(jokeTerm string) {
+	_, results := getJokeDataWithTerm(jokeTerm)
+	fmt.Println(results)
+}
+
+func getJokeDataWithTerm(jokeTerm string) (totalJokes int, jokeList []Joke){
+	url := fmt.Sprintf("https://icanhazdadjoke.com/search?term=%s", jokeTerm)
+	responseBytes := getJokeData(url)
+	jokeListRaw := SearchResult{}
+	if err := json.Unmarshal(responseBytes, &jokeListRaw); err != nil {
+		log.Printf("Could not unmarshal responseBytes - %v", err)
+	}
+	jokes := []Joke{}
+	if err := json.Unmarshal(jokeListRaw.Results, &jokes); err != nil {
+		log.Printf("Counld not unmarshal jokeListRaw results - %v", err)
+	}
+	return jokeListRaw.TotalJokes, jokes
 }
 
 func getJokeData(baseAPI string) []byte {
